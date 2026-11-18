@@ -19,10 +19,10 @@ ses propres algorithmes et ses propres sons. Projet issu d'Oxide (même base JUC
 - ARPEGGIO et SEQUENCER de la famille : REC / OVD, REST, PLAY, LIVE (la séquence garde son son, le clavier joue
   celui du panneau), EDIT, 8 mémoires.
 
-## Les sons d'usine (5 banques de 8)
+## Les sons d'usine (7 banques de 8)
 
 A pianos électriques et claviers · B basses · C cuivres et leads · D cloches, mallets et cordes pincées ·
-E cordes, pads, voix, orgues, percussions et effets. Tous programmés ici (tools/sons.py) à partir des recettes FM
+E cordes, pads, voix, orgues, percussions et effets · F pianos · G funk 80s. Tous programmés ici (tools/sons.py) à partir des recettes FM
 classiques ; niveaux égalisés par mesure (tools/niveaux.py → tools/levels.json, même intensité à ±0,1 dB).
 
 ## Construire (macOS)

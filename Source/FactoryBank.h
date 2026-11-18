@@ -22,7 +22,13 @@ public:
    "MALLET - Vibes","MALLET - Kalimba","PLUCK - Koto","PLUCK - Nylon Guitar",
    // E: strings, pads, voices, organs, percussion and effects
    "STRINGS - FM Ensemble","PAD - Glass Choir","PAD - Warm Haze","VOICE - Ah Choir",
-   "ORGAN - Drawbars","ORGAN - Perc Organ","PERC - FM Toms","FX - Laser Zap"};
+   "ORGAN - Drawbars","ORGAN - Perc Organ","PERC - FM Toms","FX - Laser Zap",
+   // F: pianos
+   "PIANO - Concert Grand","PIANO - Bright Pop","PIANO - Electric Grand","PIANO - Honky Tonk",
+   "PIANO - Soft Felt","PIANO - Piano Tines","PIANO - Dark Upright","PIANO - String Layer",
+   // G: 80s funk
+   "FUNK - Slap Bass","FUNK - Punch Bass","FUNK - Muted Guitar","FUNK - Clav Quack",
+   "FUNK - Horn Stabs","FUNK - EP Groove","FUNK - Chord Stab","FUNK - Riff Pluck"};
   return names;
  }
  static std::unique_ptr<juce::XmlElement> load(const juce::String& name) {
