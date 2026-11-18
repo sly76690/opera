@@ -26,11 +26,11 @@ public:
   state.state.setProperty("stateVersion",1,nullptr);
   for(auto& slot:ccTarget)slot.store(-1);addListener(this);
   for(int i=0;i<opera::operators;++i){auto& r=reads[size_t(i)];auto get=[&](const String& w){return state.getRawParameterValue(opId(i,w.toRawUTF8()));};
-   r.coarse=get("coarse");r.fine=get("fine");r.detune=get("detune");r.level=get("level");r.velocity=get("vel");r.keyScale=get("keyscale");
+   r.coarse=get("coarse");r.fixed=get("fixed");r.fine=get("fine");r.detune=get("detune");r.level=get("level");r.velocity=get("vel");r.keyScale=get("keyscale");
    for(int k=0;k<4;++k){r.time[size_t(k)]=get("t"+String(k+1));r.lvl[size_t(k)]=get("l"+String(k+1));}}
   auto raw=[this](const char* id){return state.getRawParameterValue(id);};
   g.algorithm=raw("algorithm");g.feedback=raw("feedback");g.rateScale=raw("rateScale");g.transpose=raw("transpose");g.tune=raw("tune");
-  g.bendRange=raw("bendRange");g.lfoPitch=raw("lfoPitch");g.wheelDepth=raw("wheelDepth");g.lfoAmp=raw("lfoAmp");
+  g.pitchEnv=raw("pitchEnv");g.pitchEnvTime=raw("pitchEnvTime");g.patchLevel=raw("patchLevel");g.bendRange=raw("bendRange");g.lfoPitch=raw("lfoPitch");g.wheelDepth=raw("wheelDepth");g.lfoAmp=raw("lfoAmp");
   liveLayer.build(state,getParameters());recordHeld.ensureStorageAllocated(256);recordChord.ensureStorageAllocated(256);
  }
  ~Orbit() override {removeListener(this);for(auto* param:getParameters()) if(auto* identified=dynamic_cast<AudioProcessorParameterWithID*>(param)) state.removeParameterListener(identified->paramID,this);}
@@ -74,6 +74,8 @@ public:
  std::atomic<int> sequenceSteps{0};
  // RATIO: the coarse stops (0.5, then 1 to 31), as the panel and the host show them.
  static float coarseRatio(int index){return index<=0?.5f:float(index);}
+ // FIXED: the 32 RATIO stops become frequencies a third of an octave apart from 16 Hz (to about 20 kHz), FINE moves between them.
+ static float fixedHz(int index,float fine){return 16.f*std::exp2(float(jlimit(0,31,index))/3.f)*(1.f+fine*.26f);}
 
  // Short names for the host and controller displays.
  static String label(const String& id,const String& longName){
@@ -81,12 +83,12 @@ public:
    {"algorithm","Algorithm"},{"feedback","Feedback"},{"rateScale","Key Rate"},{"lfoRate","LFO Rate"},{"lfoDelay","LFO Delay"},{"lfoWave","LFO Wave"},{"lfoPitch","LFO Pitch"},
    {"lfoAmp","LFO Amp"},{"wheelDepth","Wheel Vib"},{"transpose","Transpose"},{"tune","Tune"},{"bendRange","Bend Range"},{"gain","Volume"},{"chorus","Chorus"},
    {"delayOn","Dly On"},{"delayTime","Dly Time"},{"delaySync","Dly Sync"},{"delayFeedback","Dly Fdbk"},{"delayMod","Dly Mod"},{"delayMix","Dly Level"},
-   {"reverbOn","Rev On"},{"reverbType","Rev Type"},{"reverbSize","Rev Size"},{"reverbDamp","Rev Damp"},{"reverbColor","Rev Tone"},{"reverbMix","Rev Level"},
+   {"reverbOn","Rev On"},{"reverbType","Rev Type"},{"reverbSize","Rev Size"},{"reverbDamp","Rev Damp"},{"reverbColor","Rev Tone"},{"reverbMix","Rev Level"},{"pitchEnv","P.Env Amt"},{"pitchEnvTime","P.Env Time"},{"patchLevel","Level"},
    {"arpOn","Arp On"},{"arpSync","Arp Sync"},{"arpTempo","Arp Tempo"},{"arpGate","Arp Gate"},{"arpDivision","Arp Step"},{"arpPattern","Arp Mode"},{"arpOctaves","Arp Range"},
    {"seqRec","Seq Rec"},{"seqRest","Seq Rest"},{"seqPlay","Seq Play"},{"seqOvd","Seq Overdub"},{"seqLive","Seq Live"}};
   const auto found=names.find(id);if(found!=names.end())return found->second;
   if(id.startsWith("op")){ // op3level -> OP3 Level
-   static const std::map<String,String> parts{{"coarse","Ratio"},{"fine","Fine"},{"detune","Detune"},{"level","Level"},{"vel","Vel"},{"keyscale","Key Scl"},
+   static const std::map<String,String> parts{{"coarse","Ratio"},{"fixed","Fixed"},{"fine","Fine"},{"detune","Detune"},{"level","Level"},{"vel","Vel"},{"keyscale","Key Scl"},
     {"t1","Time 1"},{"t2","Time 2"},{"t3","Time 3"},{"t4","Time 4"},{"l1","Level 1"},{"l2","Level 2"},{"l3","Level 3"},{"l4","Level 4"}};
    const auto part=parts.find(id.substring(3));if(part!=parts.end())return "OP"+id.substring(2,3)+" "+part->second;}
   return longName;
@@ -113,13 +115,15 @@ public:
   StringArray ratios;for(int i=0;i<32;++i)ratios.add(i==0?String("0.5"):String(i));
   for(int i=0;i<opera::operators;++i){
    const bool first=i==0;const String op="OP"+String(i+1)+" ";
-   choice(opId(i,"coarse"),op+"ratio",ratios,1);add(opId(i,"fine"),op+"fine",0,.99f,0);
+   choice(opId(i,"coarse"),op+"ratio",ratios,1);toggle(opId(i,"fixed"),op+"fixed frequency",false); /* FIXED: RATIO and FINE then set Hz */
+   add(opId(i,"fine"),op+"fine",0,.99f,0);
    add(opId(i,"detune"),op+"detune (ct)",-10,10,0,1.f,1.f);add(opId(i,"level"),op+"level",0,1,first?.9f:0);
    add(opId(i,"vel"),op+"velocity",0,1,.3f);add(opId(i,"keyscale"),op+"key scaling",0,1,0);
    const float times[]={.003f,.4f,1.5f,.35f},levels[]={1,.75f,.6f,0};
    for(int k=0;k<4;++k)add(opId(i,("t"+String(k+1)).toRawUTF8()),op+"time "+String(k+1)+" (s)",.001f,20,times[k],.25f);
    for(int k=0;k<4;++k)add(opId(i,("l"+String(k+1)).toRawUTF8()),op+"level "+String(k+1),0,1,levels[k]);}
   add("rateScale","Key rate",0,1,.3f);
+  add("pitchEnv","Pitch env (st)",-24,24,0,1.f,1.f);add("pitchEnvTime","Pitch env time (s)",.005f,4,.12f,.4f);add("patchLevel","Level (dB)",-18,12,0);
   add("lfoRate","LFO (Hz)",.05f,20,5.f,.33f);add("lfoDelay","LFO delay (s)",0,4,0,.5f);choice("lfoWave","LFO wave",{"SINE","TRIANGLE","SAW","SQUARE","S&H"});
   add("lfoPitch","LFO pitch",0,2,0,.6f);add("lfoAmp","LFO amp",0,1,0);add("wheelDepth","Wheel vibrato",0,2,.5f,.6f);
   add("transpose","Transpose (st)",-24,24,0,1.f,1.f);add("tune","Tune (ct)",-50,50,0,1.f,1.f);add("bendRange","Pitch bend (st)",0,12,2,1.f,1.f);
@@ -313,17 +317,18 @@ public:
  public: std::atomic<int> screenPressure{-1}; // the panel keyboard's trackpad force (not used by this instrument)
 private:
  float value(const char* id) const {return state.getRawParameterValue(id)->load();}
- struct Reads{std::atomic<float> *coarse=nullptr,*fine=nullptr,*detune=nullptr,*level=nullptr,*velocity=nullptr,*keyScale=nullptr;std::array<std::atomic<float>*,4> time{},lvl{};};
- struct Globals{std::atomic<float> *algorithm=nullptr,*feedback=nullptr,*rateScale=nullptr,*transpose=nullptr,*tune=nullptr,*bendRange=nullptr,*lfoPitch=nullptr,*wheelDepth=nullptr,*lfoAmp=nullptr;};
+ struct Reads{std::atomic<float> *coarse=nullptr,*fixed=nullptr,*fine=nullptr,*detune=nullptr,*level=nullptr,*velocity=nullptr,*keyScale=nullptr;std::array<std::atomic<float>*,4> time{},lvl{};};
+ struct Globals{std::atomic<float> *pitchEnv=nullptr,*pitchEnvTime=nullptr,*patchLevel=nullptr,*algorithm=nullptr,*feedback=nullptr,*rateScale=nullptr,*transpose=nullptr,*tune=nullptr,*bendRange=nullptr,*lfoPitch=nullptr,*wheelDepth=nullptr,*lfoAmp=nullptr;};
  // The sound's settings, from the panel (layer null) or from LIVE's frozen copy.
  void readSettings(opera::Settings& out,const ParamLayer* layer){
   auto get=[layer](const std::atomic<float>* a){return layer!=nullptr?layer->get(a):a->load();};
   for(int i=0;i<opera::operators;++i){const auto& r=reads[size_t(i)];auto& o=out.op[size_t(i)];
-   o.ratio=coarseRatio(int(get(r.coarse)));o.fine=get(r.fine);o.detune=get(r.detune);o.level=get(r.level);o.velocity=get(r.velocity);o.keyScale=get(r.keyScale);
+   o.ratio=coarseRatio(int(get(r.coarse)));o.fixedHz=get(r.fixed)>.5f?fixedHz(int(get(r.coarse)),get(r.fine)):0.f;o.fine=get(r.fine);o.detune=get(r.detune);o.level=get(r.level);o.velocity=get(r.velocity);o.keyScale=get(r.keyScale);
    for(int k=0;k<4;++k){o.time[size_t(k)]=get(r.time[size_t(k)]);o.level4[size_t(k)]=get(r.lvl[size_t(k)]);}}
   out.algorithm=int(get(g.algorithm));out.feedback=get(g.feedback);out.rateScale=get(g.rateScale);
   out.transpose=get(g.transpose);out.tune=get(g.tune);out.bend=bend*get(g.bendRange);
   out.pitchDepth=get(g.lfoPitch)+wheel*get(g.wheelDepth);out.ampDepth=get(g.lfoAmp);
+  out.pitchEnv=get(g.pitchEnv);out.pitchEnvTime=get(g.pitchEnvTime);out.output=Decibels::decibelsToGain(get(g.patchLevel));
  }
  // The LFO, shared by all the voices; after a silence it fades in over LFO DELAY.
  float lfoNext(){

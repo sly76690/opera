@@ -18,7 +18,7 @@ int main() {
  if (!sequencerTests()) return 102;
  if (!liveRegressionTests()) return 103;
  std::unique_ptr<juce::AudioProcessor> p(createPluginFilter());
- if (p->getName() != "Opera" || p->getParameters().size() != 122) { std::cerr << "Identity or parameter count: " << p->getParameters().size() << "\n"; return 2; }
+ if (p->getName() != "Opera" || p->getParameters().size() != 131) { std::cerr << "Identity or parameter count: " << p->getParameters().size() << "\n"; return 2; }
  auto* first = dynamic_cast<juce::AudioProcessorParameterWithID*>(p->getParameters()[0]);
  if (!first || first->paramID != "algorithm") return 3;
  // Plays: a note, clean and audible.
@@ -69,13 +69,14 @@ int main() {
    std::unique_ptr<juce::AudioProcessor> q(createPluginFilter());
    for (auto* child : xml->getChildIterator()) if (!parameterOf(*q, child->getStringAttribute("id").toRawUTF8())) { std::cerr << file.getFileName() << " names an unknown setting: " << child->getStringAttribute("id") << "\n"; return 21; }
    juce::MemoryBlock data; juce::AudioProcessor::copyXmlToBinary(*xml, data); q->setStateInformation(data.getData(), int(data.getSize()));
-   q->setRateAndBufferSizeDetails(48000, 256); q->prepareToPlay(48000, 256); double sum = 0, peak = 0; long n = 0;
+   q->setRateAndBufferSizeDetails(48000, 256); q->prepareToPlay(48000, 256); double sum = 0, peak = 0, window = 0, loud = 0; long n = 0; int inWindow = 0;
    for (int k = 0; k < 400; ++k) { juce::AudioBuffer<float> b(2, 256); b.clear(); juce::MidiBuffer m;
     if (k == 0) for (int note : {48, 55, 60, 64}) m.addEvent(juce::MidiMessage::noteOn(1, note, .8f), 0);
     if (k == 300) for (int note : {48, 55, 60, 64}) m.addEvent(juce::MidiMessage::noteOff(1, note), 0);
-    q->processBlock(b, m); for (int c = 0; c < 2; ++c) for (int i = 0; i < 256; ++i) { const double v = b.getSample(c, i); if (!std::isfinite(v)) return 22; sum += v * v; peak = std::max(peak, std::abs(v)); ++n; } }
-   const double rms = std::sqrt(sum / double(n)); std::cout << "  " << file.getFileNameWithoutExtension() << "  rms " << juce::Decibels::gainToDecibels(rms) << " dB  peak " << juce::Decibels::gainToDecibels(peak) << " dB\n";
-   if (rms < .01 || peak > 1.f) { std::cerr << file.getFileName() << " too quiet or clipping\n"; return 23; } }
+    q->processBlock(b, m); for (int c = 0; c < 2; ++c) for (int i = 0; i < 256; ++i) { const double v = b.getSample(c, i); if (!std::isfinite(v)) return 22; sum += v * v; window += v * v; peak = std::max(peak, std::abs(v)); ++n; }
+    if (++inWindow == 10) { loud = std::max(loud, std::sqrt(window / 5120.)); window = 0; inWindow = 0; } } // the loudest 50 ms
+   const double rms = std::sqrt(sum / double(n)); std::cout << "  " << file.getFileNameWithoutExtension() << "  rms " << juce::Decibels::gainToDecibels(rms) << " dB  peak " << juce::Decibels::gainToDecibels(peak) << " dB  loud " << juce::Decibels::gainToDecibels(loud) << " dB\n";
+   if (loud < .03 || peak > 1.f) { std::cerr << file.getFileName() << " too quiet or clipping\n"; return 23; } }
   if (count == 0) return 24;
   std::cout << "PASS " << count << " shipped sounds\n";}
  return 0;

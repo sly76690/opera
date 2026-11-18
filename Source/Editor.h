@@ -642,15 +642,20 @@ private:
  // ---- OPERA: the algorithm, LFO, voice and effects on top; the six operators below, side by side ----------------------
  void buildOpera(){
   using namespace orbitui;
-  auto area=section("ALGORITHM",teal,{32,panelY,460,panelH});
-  place(diagram,{area.getX(),area.getY()+2,300,area.getHeight()-8},-1);
-  addRowKnob("algorithm","ALGORITHM",{area.getX()+304,area.getY()+4,area.getWidth()-304,96});
-  addRowKnob("feedback","FEEDBACK",{area.getX()+304,area.getY()+104,area.getWidth()-304,96});
-  area=section("LFO",teal,{498,panelY,330,panelH});auto top=split(area.withHeight(80),{1,1,1}),low=split(area.withTrimmedTop(96).withHeight(80),{1,1,1});
+  auto area=section("ALGORITHM",teal,{32,panelY,360,panelH});
+  place(diagram,{area.getX(),area.getY()+2,250,area.getHeight()-8},-1);
+  addRowKnob("algorithm","ALGORITHM",{area.getX()+252,area.getY()+4,area.getWidth()-252,96});
+  addRowKnob("feedback","FEEDBACK",{area.getX()+252,area.getY()+104,area.getWidth()-252,96});
+  area=section("LFO",teal,{398,panelY,330,panelH});auto top=split(area.withHeight(80),{1,1,1}),low=split(area.withTrimmedTop(96).withHeight(80),{1,1,1});
   compactKnob("lfoRate","RATE",top[0]);compactKnob("lfoDelay","DELAY",top[1]);menuChoice("lfoWave","WAVE",top[2]);
   compactKnob("lfoPitch","PITCH",low[0]);compactKnob("lfoAmp","AMP",low[1]);compactKnob("wheelDepth","WHEEL",low[2]);
-  area=section("VOICE",teal,{834,panelY,220,panelH});top=split(area.withHeight(80),{1,1});low=split(area.withTrimmedTop(96).withHeight(80),{1,1});
-  compactKnob("transpose","TRANSPOSE",top[0]);compactKnob("tune","TUNE",top[1]);compactKnob("bendRange","BEND",low[0]);compactKnob("rateScale","KEY RATE",low[1]);
+  // PITCH ENV: each note starts AMOUNT semitones away and glides home in TIME (plucks, toms, brass falls, zaps).
+  area=section("PITCH ENV",teal,{734,panelY,110,panelH});
+  compactKnob("pitchEnv","AMOUNT",area.withHeight(80));compactKnob("pitchEnvTime","TIME",area.withTrimmedTop(96).withHeight(80));
+  // VOICE: LEVEL is the sound's own level, kept with it, so all the sounds play equally loud.
+  area=section("VOICE",teal,{850,panelY,204,panelH});top=split(area.withHeight(80),{1,1,1});low=split(area.withTrimmedTop(96).withHeight(80),{1,1,1});
+  compactKnob("transpose","TRANSP.",top[0]);compactKnob("tune","TUNE",top[1]);compactKnob("patchLevel","LEVEL",top[2]);
+  compactKnob("bendRange","BEND",low[0]);compactKnob("rateScale","KEY RATE",low[1]);
   area=section("EFFECTS",teal,{1060,panelY,508,panelH});top=split(area.withHeight(80),{1,1,1,1,1,.8f,.9f});low=split(area.withTrimmedTop(96).withHeight(80),{2.f,1,1,1,1,.8f});
   compactKnob("chorus","CHORUS",top[0]);compactKnob("delayTime","TIME",top[1]);delayTimeKnob=&faders.getLast()->slider;
   compactKnob("delayFeedback","FDBK",top[2]);compactKnob("delayMod","MOD",top[3]);compactKnob("delayMix","DELAY",top[4]);printedToggle("delayOn","ON",top[5].withTrimmedTop(18));
@@ -666,8 +671,10 @@ private:
    auto rowAt=[&](int r){return split(op.withTrimmedTop(r*78).withHeight(72),{1,1,1,1});};
    auto id=[i](const char* what){return Orbit::opId(i,what);};
    auto a=rowAt(0);compactKnob(store(id("coarse")),"RATIO",a[0]);
-   caption({},a[0].getUnion(a[1]).withTrimmedTop(59).withHeight(13),-1,10.f,led);ratioLabels[size_t(i)]=labels.getLast();ratioLabels[size_t(i)]->getProperties().set("live",true); /* the frequency ratio, fine included */
-  compactKnob(store(id("fine")),"FINE",a[1]);compactKnob(store(id("detune")),"DETUNE",a[2]);compactKnob(store(id("level")),"LEVEL",a[3]);
+   caption({},a[0].withTrimmedTop(59).withHeight(13).expanded(8,0),-1,10.f,led);ratioLabels[size_t(i)]=labels.getLast();ratioLabels[size_t(i)]->getProperties().set("live",true); /* the frequency ratio, fine included */
+  compactKnob(store(id("fine")),"FINE",a[1]);
+   // FIX: RATIO and FINE set a frequency of its own (Hz), the same on every key.
+   addToggle(store(id("fixed")),"FIX",-1,a[1].withTrimmedTop(58).withHeight(15).withSizeKeepingCentre(34,15),0,orbitui::neutral);toggles.getLast()->button.getProperties().set("fontSize",10.f);compactKnob(store(id("detune")),"DETUNE",a[2]);compactKnob(store(id("level")),"LEVEL",a[3]);
    a=rowAt(1);compactKnob(store(id("vel")),"VEL",a[0]);compactKnob(store(id("keyscale")),"KEY SC.",a[1]);
    envelopes[size_t(i)]=std::make_unique<EnvelopeGraph>(orbit,i);place(*envelopes[size_t(i)],a[2].getUnion(a[3]).reduced(2,4),-1);
    a=rowAt(2);for(int k=0;k<4;++k)compactKnob(store(id(("t"+String(k+1)).toRawUTF8())),("TIME "+String(k+1)).toRawUTF8(),a[size_t(k)]);
@@ -905,8 +912,11 @@ private:
   seqMemory.setButtonText(orbit.sequenceSlot() >= 0 ? "SEQ " + String(orbit.sequenceSlot() + 1) : String("SEQ -"));
   diagram.refresh(); for (auto& e : envelopes) if (e) e->refresh();
   for (int i = 0; i < opera::operators; ++i) if (auto* l = ratioLabels[size_t(i)]) { // x 3.50 under RATIO and FINE
-   const float ratio = Orbit::coarseRatio(int(orbit.state.getRawParameterValue(Orbit::opId(i, "coarse"))->load())) * (1.f + orbit.state.getRawParameterValue(Orbit::opId(i, "fine"))->load());
-   const String text = String::fromUTF8("\xc3\x97 ") + String(ratio, ratio < 10.f ? 2 : 1); if (l->getText() != text) l->setText(text, dontSendNotification); }
+   const int coarse = int(orbit.state.getRawParameterValue(Orbit::opId(i, "coarse"))->load()); const float fine = orbit.state.getRawParameterValue(Orbit::opId(i, "fine"))->load();
+   String text;
+   if (orbit.state.getRawParameterValue(Orbit::opId(i, "fixed"))->load() > .5f) { const float hz = Orbit::fixedHz(coarse, fine); text = hz >= 1000.f ? String(hz / 1000.f, 2) + " kHz" : String(roundToInt(hz)) + " Hz"; }
+   else { const float ratio = Orbit::coarseRatio(coarse) * (1.f + fine); text = String::fromUTF8("\xc3\x97 ") + String(ratio, ratio < 10.f ? 2 : 1); }
+   if (l->getText() != text) l->setText(text, dontSendNotification); }
   { const int a = int(orbit.state.getRawParameterValue("algorithm")->load()); if (a != shownAlgorithm) { shownAlgorithm = a; surface.repaint(); } } // the CARRIER / MOD tags
   if (orbit.isLearning()) { const int touched = orbit.lastTouchedParameter();
    shown = touched < 0 ? String("MIDI LEARN    TOUCH A CONTROL") : "MIDI LEARN    " + orbit.getParameters()[touched]->getName(14).toUpperCase() + "  <  MOVE A CC"; }

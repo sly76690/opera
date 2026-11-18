@@ -8,21 +8,21 @@ class FactoryBank {
 public:
  static const juce::StringArray& order() {
   static const juce::StringArray names{
-   // A: keys
-   "EPIANO - Tine Glow","EPIANO - Soft Bark","EPIANO - Glass Keys","EPIANO - Bright Tines",
-   "KEYS - Clav Snap","KEYS - Harpsi Wire","KEYS - Vibes Air","KEYS - Toy Piano",
-   // B: bells and mallets
-   "BELL - Glass Tower","BELL - Tubular","BELL - Music Box","BELL - Temple Gong",
-   "BELL - Ice Chimes","MALLET - Marimba","MALLET - Kalimba","MALLET - Steel Drum",
-   // C: basses
-   "BASS - Rubber FM","BASS - Solid Slap","BASS - Sub Sine","BASS - Wood Upright",
-   "BASS - Growl Stack","BASS - Metal Pluck","BASS - Hollow Pulse","BASS - Funk Pick",
-   // D: brass, leads, strings and plucks
-   "BRASS - Gold Section","BRASS - Soft Horns","BRASS - Stabs","LEAD - Reed Solo",
-   "LEAD - Saw Stack","LEAD - Flute Breath","STRINGS - FM Ensemble","KEYS - Nylon Pluck",
-   // E: organs, pads and effects
-   "ORGAN - Drawbars","ORGAN - Perc Organ","PAD - Crystal Air","PAD - Glass Choir",
-   "PAD - Slow Evolve","FX - Laser Drop","FX - Metal Rain","FX - Wind Noise"};
+   // A: electric pianos and keys
+   "EP - Tine Classic","EP - Ballad Tines","EP - Bark Stage","EP - Bell Tines",
+   "KEYS - FM Piano","KEYS - Snap Clav","KEYS - Harpsichord","KEYS - Toy Piano",
+   // B: basses
+   "BASS - Solid Slap","BASS - Synth Punch","BASS - Rubber Drop","BASS - Wood Upright",
+   "BASS - Sub Sine","BASS - Metal Pick","BASS - Funk Finger","BASS - Squelch FM",
+   // C: brass and leads
+   "BRASS - Synth Section","BRASS - Soft Horns","BRASS - Stab 84","BRASS - Power Swell",
+   "LEAD - Hard Edge","LEAD - Reed Solo","LEAD - Flute Breath","LEAD - Square Solo",
+   // D: bells, mallets and plucks
+   "BELL - Tubular","BELL - Glass Tower","BELL - Music Box","MALLET - Marimba",
+   "MALLET - Vibes","MALLET - Kalimba","PLUCK - Koto","PLUCK - Nylon Guitar",
+   // E: strings, pads, voices, organs, percussion and effects
+   "STRINGS - FM Ensemble","PAD - Glass Choir","PAD - Warm Haze","VOICE - Ah Choir",
+   "ORGAN - Drawbars","ORGAN - Perc Organ","PERC - FM Toms","FX - Laser Zap"};
   return names;
  }
  static std::unique_ptr<juce::XmlElement> load(const juce::String& name) {

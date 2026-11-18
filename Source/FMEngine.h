@@ -42,6 +42,7 @@ inline const std::array<Algorithm, 16>& algorithms() {
 // ---- settings of one operator and of the whole sound (read once per block) ----
 struct OperatorSettings {
  float ratio = 1, fine = 0, detune = 0; // frequency: the note times ratio x (1 + fine), detuned in cents
+ float fixedHz = 0;     // above 0: FIXED, the operator keeps this frequency whatever the key (drums, noises, formants)
  float level = 0;       // 0..1 (0 = silent, 1 = full)
  float velocity = .3f;  // 0..1: how much a soft note lowers it
  float keyScale = 0;    // 0..1: how much it fades going up the keyboard from middle C
@@ -54,6 +55,8 @@ struct Settings {
  float transpose = 0, bend = 0, tune = 0;          // semitones; tune in cents
  float lfoValue = 0, pitchDepth = 0, ampDepth = 0; // the LFO this sample (-1..1), its depths
  float rateScale = .3f;                            // higher notes, faster envelopes
+ float pitchEnv = 0, pitchEnvTime = .1f;            // PITCH ENV: each note starts this many semitones away and glides home in the time set
+ float output = 1;                                  // the sound's own level (LEVEL in VOICE), so every sound plays as loud as the others
 };
 
 // A sine from a table, interpolated: phase in cycles.
@@ -102,14 +105,15 @@ public:
   const bool retrigger = active(); note = midiNote; velocity = vel; held = true; age = order; if (!retrigger) { fb1 = fb2 = 0; for (auto& p : phase) p = 0; }
   const float speed = std::exp2(s.rateScale * float(midiNote - 60) / 12.f);
   for (int i = 0; i < operators; ++i) { if (!retrigger) { env[size_t(i)].db = Envelope::toDb(s.op[size_t(i)].level4[3]); gainNow[size_t(i)] = 0; } env[size_t(i)].start(s.op[size_t(i)], sampleRate, speed); }
-  untilGain = 0;
+  untilGain = 0; pitchNow = s.pitchEnv; pitchFall = s.pitchEnv == 0.f ? 0.f : std::exp(-4.6f / juce::jmax(1.f, s.pitchEnvTime * float(sampleRate))); // -40 dB of the offset at the time set
  }
  void stop(const Settings& s) { held = false; const float speed = std::exp2(s.rateScale * float(note - 60) / 12.f); for (int i = 0; i < operators; ++i) env[size_t(i)].release(s.op[size_t(i)], sampleRate, speed); }
  // One sample of this voice.
  float render(const Settings& s) {
   const auto& a = algorithms()[size_t(juce::jlimit(0, 15, s.algorithm))];
   const float speed = std::exp2(s.rateScale * float(note - 60) / 12.f);
-  const double base = 440. * std::exp2((double(note) - 69. + s.transpose + s.bend + s.tune / 100. + s.lfoValue * s.pitchDepth) / 12.);
+  const double base = 440. * std::exp2((double(note) - 69. + s.transpose + s.bend + s.tune / 100. + s.lfoValue * s.pitchDepth + pitchNow) / 12.);
+  pitchNow *= pitchFall;
   std::array<float, operators> out {}; float sum = 0; int heard = 0;
   if (--untilGain <= 0) { untilGain = gainBlock; // envelopes: computed every 16 samples, joined by straight lines
    for (int i = 0; i < operators; ++i) { const float target = env[size_t(i)].advance(gainBlock, s.op[size_t(i)], sampleRate, speed) * gain(s.op[size_t(i)]);
@@ -119,7 +123,7 @@ public:
    gainNow[size_t(i)] += gainStep[size_t(i)]; const float level = gainNow[size_t(i)];
    float pm = 0; for (int m = 0; m < operators; ++m) if (a.from[size_t(i)] & (1u << m)) pm += out[size_t(m)];
    if (i == operators - 1) pm += s.feedback * .35f * (fb1 + fb2); // operator 6 hears itself
-   const double hz = base * double(o.ratio) * (1. + double(o.fine)) * std::exp2(double(o.detune) / 1200.);
+   const double hz = (o.fixedHz > 0.f ? double(o.fixedHz) : base * double(o.ratio) * (1. + double(o.fine))) * std::exp2(double(o.detune) / 1200.);
    phase[size_t(i)] += hz / sampleRate; if (phase[size_t(i)] >= 1.) phase[size_t(i)] -= std::floor(phase[size_t(i)]);
    const float y = sine(phase[size_t(i)] + double(pm)) * level;
    if (i == operators - 1) { fb2 = fb1; fb1 = y; }
@@ -127,17 +131,17 @@ public:
    out[size_t(i)] = y * 1.6f; // as a modulator, in cycles: a full-level operator moves the next one's phase by 1.6 cycles (about ten radians)
   }
   sum *= 1.f - s.ampDepth * .5f * (1.f + s.lfoValue);
-  return heard > 0 ? sum / std::sqrt(float(heard)) : 0.f;
+  return heard > 0 ? s.output * sum / std::sqrt(float(heard)) : 0.f;
  }
  int note = -1; bool held = false; uint64_t age = 0;
 private:
  float gain(const OperatorSettings& o) const {
-  const float vel = 1.f - o.velocity * (1.f - velocity);
+  const float vel = std::pow(juce::jmax(velocity, .01f), 1.6f * o.velocity); // a curve: soft notes fall away gently, then faster
   const float keyDb = -o.keyScale * 18.f * juce::jmax(0.f, float(note - 60)) / 24.f;
   return o.level * o.level * vel * std::pow(10.f, keyDb / 20.f);
  }
  static constexpr int gainBlock = 16;
- double sampleRate = 96000; std::array<double, operators> phase {}; std::array<Envelope, operators> env {}; float velocity = 1, fb1 = 0, fb2 = 0;
+ double sampleRate = 96000; std::array<double, operators> phase {}; std::array<Envelope, operators> env {}; float velocity = 1, fb1 = 0, fb2 = 0, pitchNow = 0, pitchFall = 0;
  std::array<float, operators> gainNow {}, gainStep {}; int untilGain = 0;
 };
 
