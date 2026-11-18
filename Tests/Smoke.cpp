@@ -6,14 +6,19 @@
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 static juce::AudioProcessorParameter* parameterOf(juce::AudioProcessor& p,const char* id){for(auto* b:p.getParameters())if(auto* r=dynamic_cast<juce::RangedAudioParameter*>(b))if(r->paramID==id)return b;return nullptr;}
 static void setValue(juce::AudioProcessor& p,const char* id,float v){if(auto* r=dynamic_cast<juce::RangedAudioParameter*>(parameterOf(p,id)))r->setValueNotifyingHost(r->convertTo0to1(v));}
+#include "../Source/Arpeggiator.h"
 #include "FMTests.h"
+#include "SequencerTests.h"
+#include "LiveTests.h"
 
 // OPERA smoke tests: the FM engine, the plugin around it, its state, the panel and the shipped sounds.
 int main() {
  juce::ScopedJuceInitialiser_GUI gui;
  if (!fmTests()) return 101;
+ if (!sequencerTests()) return 102;
+ if (!liveRegressionTests()) return 103;
  std::unique_ptr<juce::AudioProcessor> p(createPluginFilter());
- if (p->getName() != "Opera" || p->getParameters().size() != 110) { std::cerr << "Identity or parameter count: " << p->getParameters().size() << "\n"; return 2; }
+ if (p->getName() != "Opera" || p->getParameters().size() != 122) { std::cerr << "Identity or parameter count: " << p->getParameters().size() << "\n"; return 2; }
  auto* first = dynamic_cast<juce::AudioProcessorParameterWithID*>(p->getParameters()[0]);
  if (!first || first->paramID != "algorithm") return 3;
  // Plays: a note, clean and audible.
@@ -47,11 +52,11 @@ int main() {
  std::function<void(juce::Component&)> collect = [&](juce::Component& parent) { const auto id = parent.getProperties()["parameterId"].toString(); if (id.isNotEmpty() && parent.isVisible()) panelIds.addIfNotAlreadyThere(id); for (auto* child : parent.getChildren()) collect(*child); };
  collect(*editor);
  for (auto* parameter : p->getParameters()) if (auto* identified = dynamic_cast<juce::AudioProcessorParameterWithID*>(parameter))
-  if (!panelIds.contains(identified->paramID)) { std::cerr << "Missing panel control: " << identified->paramID << "\n"; return 10; }
+  if (!panelIds.contains(identified->paramID) && identified->paramID != "seqOvd") /* the REC key shows overdub */ { std::cerr << "Missing panel control: " << identified->paramID << "\n"; return 10; }
  std::cout << "PASS all " << panelIds.size() << " parameters have visible panel controls\n";
  juce::PNGImageFormat png; juce::MemoryBlock before; p->getStateInformation(before);
  for (int width : {1280, 1600, 2400}) {
-  editor->setSize(width, width * 1000 / 1652); auto rendered = editor->createComponentSnapshot(editor->getLocalBounds());
+  editor->setSize(width, width * 1120 / 1652); auto rendered = editor->createComponentSnapshot(editor->getLocalBounds());
   if (!rendered.isValid() || rendered.getWidth() != width) return 11;
   juce::FileOutputStream preview(juce::File::getCurrentWorkingDirectory().getChildFile("interface-" + juce::String(width) + ".png")); preview.setPosition(0); preview.truncate();
   if (!png.writeImageToStream(rendered, preview)) return 12; }
